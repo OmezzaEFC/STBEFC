@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Football Draft Board</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f0f0f0; padding: 20px; }
+    h1 { text-align: center; }
+    #form-container { max-width: 500px; margin: auto; padding: 20px; background: #fff; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    select, input, button { width: 100%; padding: 10px; margin: 10px 0; font-size: 16px; }
+    button { cursor: pointer; }
+    #draft-board { display: flex; flex-wrap: wrap; justify-content: center; margin-top: 20px; }
+    .team-card { width: 150px; height: 100px; margin: 5px; border-radius: 8px; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; text-align: center; white-space: pre-line; }
+    .team-card img { max-height: 40px; margin-bottom: 5px; }
+  </style>
+</head>
+<body>
+  <h1>Football Draft Board</h1>
+  <div id="form-container">
+    <input type="text" id="playerName" placeholder="Enter your name">
+    <select id="teamSelect">
+      <option value="">Select a Team</option>
+    </select>
+    <button id="pickBtn">Pick Team</button>
+    <button id="resetBtn" style="background-color:red; color:white;">Reset Draft (Admin Only)</button>
+  </div>
+
+  <div id="draft-board"></div>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    // 🔹 Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyCnDsb6FcfiJyu5JsXXkL7i91ekVpXgFfo",
+  authDomain: "football-picker-efcc5.firebaseapp.com",
+  projectId: "football-picker-efcc5",
+  storageBucket: "football-picker-efcc5.firebasestorage.app",
+  messagingSenderId: "854692046028",
+  appId: "1:854692046028:web:1f0dddf9ce98f83894ce69"
+};
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // 🔹 Admin password
+    const ADMIN_PASSWORD = "supersecret"; // change to your secret password
+
+    // 🔹 Teams data
+    const teamsData = [
+      // Premier League (10)
+      { name: "Arsenal", color: "#EF4135", logo: "https://upload.wikimedia.org/wikipedia/commons/5/53/Arsenal_FC.svg" },
+      { name: "Chelsea", color: "#034694", logo: "https://upload.wikimedia.org/wikipedia/commons/4/47/Chelsea_FC.svg" },
+      { name: "Liverpool", color: "#C8102E", logo: "https://upload.wikimedia.org/wikipedia/commons/0/0c/Liverpool_FC.svg" },
+      { name: "Manchester City", color: "#6CABDD", logo: "https://upload.wikimedia.org/wikipedia/commons/7/7c/Manchester_City_FC.svg" },
+      { name: "Manchester United", color: "#DA291C", logo: "https://upload.wikimedia.org/wikipedia/commons/7/7a/Manchester_United_FC.svg" },
+      { name: "Tottenham Hotspur", color: "#132257", logo: "https://upload.wikimedia.org/wikipedia/commons/1/1d/Tottenham_Hotspur_FC.svg" },
+      { name: "Everton", color: "#003B5C", logo: "https://upload.wikimedia.org/wikipedia/commons/7/7a/Everton_FC.svg" },
+      { name: "West Ham United", color: "#7A263A", logo: "https://upload.wikimedia.org/wikipedia/commons/4/4f/West_Ham_United_FC.svg" },
+      { name: "Leeds United", color: "#004B87", logo: "https://upload.wikimedia.org/wikipedia/commons/4/4f/Leeds_United_FC.svg" },
+      { name: "Brighton", color: "#005F87", logo: "https://upload.wikimedia.org/wikipedia/commons/2/2e/Brighton_%26_Hove_Albion_FC.svg" },
+
+      // Championship (8)
+      { name: "Bournemouth", color: "#D00000", logo: "https://upload.wikimedia.org/wikipedia/commons/6/6f/AFC_Bournemouth.svg" },
+      { name: "Nottingham Forest", color: "#E40046", logo: "https://upload.wikimedia.org/wikipedia/commons/6/6f/Nottingham_Forest_FC.svg" },
+      { name: "Sheffield United", color: "#E30613", logo: "https://upload.wikimedia.org/wikipedia/commons/8/8f/Sheffield_United_FC.svg" },
+      { name: "Sunderland", color: "#E30613", logo: "https://upload.wikimedia.org/wikipedia/commons/2/2e/Sunderland_AFC.svg" },
+      { name: "Luton Town", color: "#F9A800", logo: "https://upload.wikimedia.org/wikipedia/commons/7/7e/Luton_Town_FC.svg" },
+      { name: "Burnley", color: "#9E1B32", logo: "https://upload.wikimedia.org/wikipedia/commons/5/5f/Burnley_FC.svg" },
+      { name: "Watford", color: "#FBEE23", logo: "https://upload.wikimedia.org/wikipedia/commons/0/0b/Watford_FC.svg" },
+      { name: "Cardiff City", color: "#0066B3", logo: "https://upload.wikimedia.org/wikipedia/commons/6/6b/Cardiff_City_FC.svg" },
+
+      // Scottish teams
+      { name: "Rangers", color: "#0033A0", logo: "https://upload.wikimedia.org/wikipedia/en/7/7e/Rangers_FC.svg" },
+      { name: "Celtic", color: "#008F39", logo: "https://upload.wikimedia.org/wikipedia/en/5/5c/Celtic_FC.svg" }
+    ];
+
+    const dropdown = document.getElementById('teamSelect');
+    const draftBoard = document.getElementById('draft-board');
+
+    // 🔹 Initialize Firestore if empty
+    teamsData.forEach(team => {
+      db.collection('teams').doc(team.name).get().then(doc => {
+        if (!doc.exists) db.collection('teams').doc(team.name).set({ pickedBy: null });
+      });
+    });
+
+    // 🔹 Refresh dropdown & draft board
+    function refreshTeams() {
+      dropdown.innerHTML = '<option value="">Select a Team</option>';
+      draftBoard.innerHTML = '';
+      db.collection('teams').get().then(snapshot => {
+        snapshot.forEach(doc => {
+          const team = teamsData.find(t => t.name === doc.id);
+          if (!team) return;
+          const pickedBy = doc.data().pickedBy;
+
+          // Dropdown shows only unpicked teams
+          if (!pickedBy) {
+            const option = document.createElement('option');
+            option.value = team.name;
+            option.text = team.name;
+            dropdown.appendChild(option);
+          }
+
+          // Draft board shows all picks with logo
+          const card = document.createElement('div');
+          card.className = 'team-card';
+          card.style.backgroundColor = team.color;
+
+          const logoImg = document.createElement('img');
+          logoImg.src = team.logo;
+          logoImg.alt = team.name + " logo";
+          card.appendChild(logoImg);
+
+          const text = document.createElement('div');
+          text.textContent = pickedBy ? `${team.name}\n(${pickedBy})` : team.name;
+          card.appendChild(text);
+
+          draftBoard.appendChild(card);
+        });
+      });
+    }
+
+    refreshTeams();
+
+    // 🔹 Pick team
+    document.getElementById('pickBtn').addEventListener('click', () => {
+      const selectedTeam = dropdown.value;
+      const playerName = document.getElementById('playerName').value.trim();
+      if (!selectedTeam || !playerName) { alert('Enter your name and select a team!'); return; }
+
+      db.collection('teams').doc(selectedTeam).get().then(doc => {
+        if (doc.data().pickedBy) alert('This team has already been picked!');
+        else db.collection('teams').doc(selectedTeam).set({ pickedBy: playerName }, { merge: true }).then(() => {
+          document.getElementById('playerName').value = '';
+          refreshTeams();
+        });
+      });
+    });
+
+    // 🔹 Admin-only reset
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      const password = prompt("Enter admin password to reset draft:");
+      if (password !== ADMIN_PASSWORD) { alert("Incorrect password! Only admins can reset."); return; }
+      if (!confirm('Are you sure you want to reset all picks?')) return;
+
+      db.collection('teams').get().then(snapshot => {
+        snapshot.forEach(doc => db.collection('teams').doc(doc.id).set({ pickedBy: null }, { merge: true }));
+      }).then(() => { alert('Draft has been reset!'); refreshTeams(); })
+        .catch(err => console.error('Error resetting draft:', err));
+    });
+  </script>
+</body>
+</html>
+
