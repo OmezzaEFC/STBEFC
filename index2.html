@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Football Draft</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 20px; background: #f8f8f8; }
+  #form-container { max-width: 400px; margin: auto; }
+  input { padding: 10px; width: 100%; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ccc; }
+  .custom-dropdown { position: relative; cursor: pointer; border: 1px solid #ccc; border-radius: 5px; background: #fff; margin-bottom: 10px; }
+  .selected { padding: 10px; }
+  .dropdown-options { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; max-height: 200px; overflow-y: auto; border: 1px solid #ccc; z-index: 100; }
+  .dropdown-options div { padding: 5px 10px; display: flex; align-items: center; }
+  .dropdown-options div img { width: 30px; height: 30px; margin-right: 10px; }
+  .dropdown-options div:hover { background: #f0f0f0; }
+  button { padding: 10px 15px; border-radius: 5px; border: none; cursor: pointer; margin-right: 5px; }
+  #pickBtn { background: #28a745; color: white; }
+  #resetBtn { background: red; color: white; }
+  #draftBoard { margin-top: 20px; }
+  #draftBoard div { padding: 5px; margin: 3px 0; border-radius: 5px; color: white; display: flex; align-items: center; }
+  #draftBoard div img { width: 30px; height: 30px; margin-right: 10px; }
+</style>
+</head>
+<body>
+
+<div id="form-container">
+  <input type="text" id="playerName" placeholder="Enter your name">
+  
+  <div id="teamDropdown" class="custom-dropdown">
+    <div id="selectedTeam" class="selected">Select a Team</div>
+    <div id="dropdownOptions" class="dropdown-options"></div>
+  </div>
+  
+  <button id="pickBtn">Pick Team</button>
+  <button id="resetBtn">Reset Draft (Admin Only)</button>
+  
+  <div id="draftBoard"></div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCnDsb6FcfiJyu5JsXXkL7i91ekVpXgFfo",
+  authDomain: "football-picker-efcc5.firebaseapp.com",
+  projectId: "football-picker-efcc5",
+  storageBucket: "football-picker-efcc5.firebasestorage.app",
+  messagingSenderId: "854692046028",
+  appId: "1:854692046028:web:1f0dddf9ce98f83894ce69"
+};
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  // --- TEAM DATA ---
+  const teamsData = [
+    { name: "Arsenal", color: "#EF0107", logo: "https://upload.wikimedia.org/wikipedia/en/5/53/Arsenal_FC.svg" },
+    { name: "Manchester City", color: "#6CABDD", logo: "https://upload.wikimedia.org/wikipedia/en/e/eb/Manchester_City_FC_badge.svg" },
+    { name: "Liverpool", color: "#C8102E", logo: "https://upload.wikimedia.org/wikipedia/en/0/0c/Liverpool_FC.svg" },
+    { name: "Manchester United", color: "#DA291C", logo: "https://upload.wikimedia.org/wikipedia/en/7/7a/Manchester_United_FC_crest.svg" },
+    { name: "Chelsea", color: "#034694", logo: "https://upload.wikimedia.org/wikipedia/en/c/cc/Chelsea_FC.svg" },
+    { name: "Tottenham", color: "#132257", logo: "https://upload.wikimedia.org/wikipedia/en/b/b4/Tottenham_Hotspur.svg" },
+    { name: "Leicester City", color: "#005BAC", logo: "https://upload.wikimedia.org/wikipedia/en/2/2d/Leicester_City_crest.svg" },
+    { name: "West Ham", color: "#7A263A", logo: "https://upload.wikimedia.org/wikipedia/en/e/e0/West_Ham_United_FC_logo.svg" },
+    { name: "Everton", color: "#003399", logo: "https://upload.wikimedia.org/wikipedia/en/7/7c/Everton_FC_logo.svg" },
+    { name: "Newcastle United", color: "#241F20", logo: "https://upload.wikimedia.org/wikipedia/en/5/56/Newcastle_United_Logo.svg" },
+
+    { name: "Sunderland", color: "#FF0000", logo: "https://upload.wikimedia.org/wikipedia/en/6/6a/Sunderland_AFC_logo.svg" },
+    { name: "Birmingham City", color: "#0060A9", logo: "https://upload.wikimedia.org/wikipedia/en/6/6c/Birmingham_City_FC_logo.svg" },
+    { name: "Norwich City", color: "#FFF200", logo: "https://upload.wikimedia.org/wikipedia/en/8/8c/Norwich_City.svg" },
+    { name: "Sheffield United", color: "#EE2737", logo: "https://upload.wikimedia.org/wikipedia/en/2/2c/Sheffield_United_FC_logo.svg" },
+    { name: "Stoke City", color: "#E03A3E", logo: "https://upload.wikimedia.org/wikipedia/en/3/33/Stoke_City_FC_logo.svg" },
+    { name: "Watford", color: "#FBEE23", logo: "https://upload.wikimedia.org/wikipedia/en/e/e2/Watford.svg" },
+    { name: "Preston North End", color: "#002147", logo: "https://upload.wikimedia.org/wikipedia/en/3/3d/Preston_North_End.png" },
+    { name: "Cardiff City", color: "#005CAB", logo: "https://upload.wikimedia.org/wikipedia/en/4/4f/Cardiff_City_FC_crest.svg" },
+
+    { name: "Rangers", color: "#0033A0", logo: "https://upload.wikimedia.org/wikipedia/en/5/5c/Rangers_FC_logo.svg" },
+    { name: "Celtic", color: "#009933", logo: "https://upload.wikimedia.org/wikipedia/en/5/5e/Celtic_FC.svg" }
+  ];
+
+  // --- INITIALIZE TEAMS IN FIRESTORE ---
+  teamsData.forEach(team => {
+    db.collection('teams').doc(team.name).get().then(doc => {
+      if (!doc.exists) {
+        db.collection('teams').doc(team.name).set({ pickedBy: null });
+      }
+    });
+  });
+
+  const selectedTeam = document.getElementById('selectedTeam');
+  const dropdownOptions = document.getElementById('dropdownOptions');
+
+  function populateDropdown() {
+    dropdownOptions.innerHTML = '';
+    db.collection('teams').get().then(snapshot => {
+      snapshot.forEach(doc => {
+        const team = teamsData.find(t => t.name === doc.id);
+        if (!team) return;
+        if (!doc.data().pickedBy) {
+          const option = document.createElement('div');
+          const img = document.createElement('img');
+          img.src = team.logo;
+          img.alt = team.name;
+          const span = document.createElement('span');
+          span.textContent = team.name;
+          option.appendChild(img);
+          option.appendChild(span);
+          option.addEventListener('click', () => {
+            selectedTeam.dataset.value = team.name;
+            selectedTeam.textContent = team.name;
+            dropdownOptions.style.display = 'none';
+          });
+          dropdownOptions.appendChild(option);
+        }
+      });
+      if (!dropdownOptions.hasChildNodes()) {
+        dropdownOptions.innerHTML = '<div style="padding:10px;color:#888;">All teams picked!</div>';
+      }
+    }).then(updateDraftBoard);
+  }
+
+  selectedTeam.addEventListener('click', () => {
+    dropdownOptions.style.display = dropdownOptions.style.display === 'block' ? 'none' : 'block';
+  });
+
+  // --- PICK TEAM ---
+  document.getElementById('pickBtn').addEventListener('click', () => {
+    const playerName = document.getElementById('playerName').value.trim();
+    const teamName = selectedTeam.dataset.value;
+    if (!playerName || !teamName) return alert("Enter name and select a team");
+
+    db.collection('teams').doc(teamName).update({ pickedBy: playerName }).then(() => {
+      populateDropdown();
+      selectedTeam.textContent = "Select a Team";
+      selectedTeam.dataset.value = '';
+    });
+  });
+
+  // --- ADMIN RESET ---
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    const adminPass = prompt("Enter admin password:");
+    if (adminPass !== "admin123") return alert("Wrong password!");
+    teamsData.forEach(team => {
+      db.collection('teams').doc(team.name).update({ pickedBy: null });
+    });
+    populateDropdown();
+  });
+
+  // --- DRAFT BOARD ---
+  function updateDraftBoard() {
+    const board = document.getElementById('draftBoard');
+    board.innerHTML = '';
+    db.collection('teams').get().then(snapshot => {
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.pickedBy) {
+          const team = teamsData.find(t => t.name === doc.id);
+          const div = document.createElement('div');
+          div.style.backgroundColor = team.color;
+          const img = document.createElement('img');
+          img.src = team.logo;
+          img.alt = team.name;
+          div.appendChild(img);
+          div.appendChild(document.createTextNode(`${team.name} → ${data.pickedBy}`));
+          board.appendChild(div);
+        }
+      });
+    });
+  }
+
+  // --- INITIAL LOAD ---
+  setTimeout(populateDropdown, 1000);
+</script>
+</body>
+</html>
